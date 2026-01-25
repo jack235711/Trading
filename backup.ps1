@@ -5,6 +5,8 @@ param (
     [string]$Message = "Update project: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 )
 
+Set-Location $PSScriptRoot
+
 Write-Host "--- バックアップを開始します ---" -ForegroundColor Cyan
 
 # 1. 変更をステージング

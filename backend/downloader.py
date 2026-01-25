@@ -1,18 +1,67 @@
-"""
-Dukascopyから指定した日付のbi5ファイルをダウンロードするスクリプト
-"""
 import requests
+import time
 from pathlib import Path
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 
 
-def download_bi5_files(pair: str, date: str):
+def download_single_hour(pair: str, year: int, month: int, day: int, hour: int, save_dir: Path):
     """
-    指定した通貨ペアと日付のbi5ファイルをダウンロード
+    1時間分のbi5ファイルをダウンロードする補助関数
+    """
+    url = f"https://datafeed.dukascopy.com/datafeed/{pair}/{year}/{month:02d}/{day:02d}/{hour:02d}h_ticks.bi5"
+    filename = save_dir / f"{hour:02d}h_ticks.bi5"
+    
+    # 既存ファイルがある場合はスキップ
+    if filename.exists() and filename.stat().st_size > 0:
+        return True, "skip"
+    
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, timeout=30)
+            
+            # 404 Not Found はデータがないのでリトライしない
+            if response.status_code == 404:
+                return False, "no data (404)"
+
+            # 5xxエラーなどはリトライ
+            if response.status_code >= 500:
+                response.raise_for_status() # 例外を発生させてcatchブロックへ
+
+            response.raise_for_status()
+            
+            # ファイルに保存
+            content = response.content
+            if len(content) > 0:
+                with open(filename, 'wb') as f:
+                    f.write(content)
+                return True, f"complete ({len(content)} bytes)"
+            else:
+                # 200 OK だが空データの場合もリトライ対象にするか、あるいはデータなしとみなすか
+                # Dukascopyの場合、休日は空ファイルが返ることもあるが、サイズ0なら意味ないのでリトライせずno data扱いとする
+                return False, "no data (0 bytes)"
+        
+        except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
+            # 404以外は原則リトライ
+            last_error = e
+            if attempt < max_retries - 1:
+                # 指数バックオフ + ジッター (固定だと競合しやすいため)
+                sleep_time = (2 ** attempt) + (0.1 * attempt) 
+                time.sleep(sleep_time)
+                continue
+            
+    return False, f"error - max retries exceeded: {last_error}"
+
+
+def download_bi5_files(pair: str, date: str, max_workers: int = 2):
+    """
+    指定した通貨ペアと日付のbi5ファイルを並列ダウンロード
     
     Args:
         pair: 通貨ペア（例: "EURUSD"）
         date: 日付（例: "2020-01-01"）
+        max_workers: 並列数 (デフォルト2: 複数ペア同時実行時の負荷軽減のため)
     """
     # 日付をパース
     dt = datetime.strptime(date, "%Y-%m-%d")
@@ -24,38 +73,23 @@ def download_bi5_files(pair: str, date: str):
     save_dir = Path(f"../data/{pair}/{year}/{month:02d}/{day:02d}")
     save_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"ダウンロード開始: {pair} / {date}")
+    print(f"ダウンロード開始 (並列): {pair} / {date}")
     
-    # 0時〜23時の24ファイルをダウンロード
     success_count = 0
-    for hour in range(24):
-        url = f"https://datafeed.dukascopy.com/datafeed/{pair}/{year}/{month:02d}/{day:02d}/{hour:02d}h_ticks.bi5"
-        filename = save_dir / f"{hour:02d}h_ticks.bi5"
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(download_single_hour, pair, year, month, day, hour, save_dir): hour 
+            for hour in range(24)
+        }
         
-        # 既存ファイルがある場合はスキップ
-        if filename.exists():
-            print(f"  {hour:02d}h: スキップ（既存）")
-            success_count += 1
-            continue
-        
-        try:
-            response = requests.get(url, timeout=30)
-            response.raise_for_status()
-            
-            # ファイルに保存
-            with open(filename, 'wb') as f:
-                f.write(response.content)
-            
-            if len(response.content) > 0:
-                print(f"  {hour:02d}h: ダウンロード完了 ({len(response.content)} bytes)")
+        for future in futures:
+            hour = futures[future]
+            success, msg = future.result()
+            if success:
                 success_count += 1
-            else:
-                print(f"  {hour:02d}h: データなし")
-        
-        except requests.exceptions.RequestException as e:
-            print(f"  {hour:02d}h: エラー - {e}")
+            print(f"  {hour:02d}h: {msg}")
     
-    print(f"ダウンロード完了: {save_dir} ({success_count}/24 ファイル)")
+    print(f"ダウンロード完了: {pair}/{date} ({success_count}/24 ファイル)")
     return success_count
 
 
@@ -95,5 +129,9 @@ def download_date_range(pair: str, start_date: str, end_date: str):
 
 
 if __name__ == "__main__":
-    # 2025年1年間のEURUSDデータをダウンロード
-    download_date_range("EURUSD", "2025-01-01", "2025-12-31")
+    # 2025年1年間の主要通貨ペアデータを並列にダウンロード開始
+    pairs = ["EURUSD", "USDJPY", "GBPUSD", "AUDUSD"]
+    
+    with ThreadPoolExecutor(max_workers=len(pairs)) as executor:
+        for pair in pairs:
+            executor.submit(download_date_range, pair, "2025-01-01", "2025-12-31")

@@ -1,11 +1,15 @@
 """
 bi5ファイルを読み込み、1分足OHLCに変換するモジュール
+Parquetファイルが存在する場合はそちらを優先的に読み込む
 """
 import lzma
 import struct
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 import pandas as pd
+
+# Parquetデータディレクトリ
+PARQUET_DIR = Path("../parquet_data")
 
 
 def read_bi5_file(filepath: Path, base_timestamp_ms: int):
@@ -161,6 +165,106 @@ def load_date_range_data(pair: str, start_date: str, end_date: str):
     # 全データを結合
     result = pd.concat(all_ohlc, ignore_index=True)
     return result
+
+
+def load_day_data_from_parquet(pair: str, date: str):
+    """
+    Parquetファイルから1日分のOHLCデータを読み込み
+    
+    Args:
+        pair: 通貨ペア（例: "EURUSD"）
+        date: 日付（例: "2025-04-01"）
+    
+    Returns:
+        pandas.DataFrame: 1分足OHLC（columns: time, open, high, low, close）
+    """
+    dt = datetime.strptime(date, "%Y-%m-%d")
+    year = dt.year
+    month = dt.month - 1  # Dukascopy format
+    day = dt.day
+    
+    parquet_file = PARQUET_DIR / pair / str(year) / f"{month:02d}" / f"{day:02d}.parquet"
+    
+    if not parquet_file.exists():
+        raise FileNotFoundError(f"Parquetファイルが見つかりません: {parquet_file}")
+    
+    # Parquetから読み込み（高速）
+    df = pd.read_parquet(parquet_file, engine='pyarrow')
+    return df
+
+
+def load_date_range_data_from_parquet(pair: str, start_date: str, end_date: str):
+    """
+    Parquetファイルから日付範囲のOHLCデータを読み込み
+    
+    Args:
+        pair: 通貨ペア（例: "EURUSD"）
+        start_date: 開始日（例: "2025-01-01"）
+        end_date: 終了日（例: "2025-01-31"）
+    
+    Returns:
+        pandas.DataFrame: 1分足OHLC（columns: time, open, high, low, close）
+    """
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    
+    all_ohlc = []
+    current_dt = start_dt
+    
+    while current_dt <= end_dt:
+        date_str = current_dt.strftime("%Y-%m-%d")
+        try:
+            ohlc = load_day_data_from_parquet(pair, date_str)
+            if not ohlc.empty:
+                all_ohlc.append(ohlc)
+        except FileNotFoundError:
+            pass  # データがない日はスキップ
+        
+        current_dt += timedelta(days=1)
+    
+    if not all_ohlc:
+        return pd.DataFrame(columns=['time', 'open', 'high', 'low', 'close'])
+    
+    # 全データを結合
+    result = pd.concat(all_ohlc, ignore_index=True)
+    return result
+
+
+def load_day_data_smart(pair: str, date: str):
+    """
+    Parquetが存在すればそちらから、なければbi5から読み込み
+    
+    Args:
+        pair: 通貨ペア（例: "EURUSD"）
+        date: 日付（例: "2025-04-01"）
+    
+    Returns:
+        pandas.DataFrame: 1分足OHLC
+    """
+    try:
+        return load_day_data_from_parquet(pair, date)
+    except FileNotFoundError:
+        # Parquetがなければbi5から読み込み
+        return load_day_data(pair, date)
+
+
+def load_date_range_data_smart(pair: str, start_date: str, end_date: str):
+    """
+    Parquetが存在すればそちらから、なければbi5から読み込み
+    
+    Args:
+        pair: 通貨ペア（例: "EURUSD"）
+        start_date: 開始日（例: "2025-01-01"）
+        end_date: 終了日（例: "2025-01-31"）
+    
+    Returns:
+        pandas.DataFrame: 1分足OHLC
+    """
+    try:
+        return load_date_range_data_from_parquet(pair, start_date, end_date)
+    except FileNotFoundError:
+        # Parquetがなければbi5から読み込み
+        return load_date_range_data(pair, start_date, end_date)
 
 
 if __name__ == "__main__":

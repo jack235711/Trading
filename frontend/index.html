@@ -4,8 +4,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FX Chart - EURUSD</title>
+    <title>FX Lab - Premium Analysis Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-deep: #0b0e14;
+            --bg-pane: #161a25;
+            --bg-header: rgba(22, 26, 37, 0.8);
+            --accent-primary: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.4);
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --price-up: #10b981;
+            --price-down: #ef4444;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.05);
+            --sidebar-width: 72px;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -13,268 +31,550 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background-color: #131722;
-            color: #d1d4dc;
-            padding: 20px;
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            display: grid;
+            grid-template-columns: var(--sidebar-width) 1fr;
+            height: 100vh;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
         }
 
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
+        /* Sidebar Glassmorphism */
+        .sidebar {
+            background-color: var(--bg-pane);
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 0;
+            z-index: 100;
+            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .logo-area {
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .logo-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 800;
+            color: white;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .nav-item {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .nav-item:hover {
+            background: var(--glass-bg);
+            color: var(--text-main);
+            transform: scale(1.05);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1));
+            color: var(--accent-primary);
+            box-shadow: inset 0 0 10px rgba(59, 130, 246, 0.2), 0 0 15px rgba(59, 130, 246, 0.1);
+        }
+
+        .nav-item svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+        /* Main Content area */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .page-container {
+            display: none;
+            flex: 1;
+            overflow: hidden;
+            height: 100%;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .page-container.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Premium Dashboard Dashboard Card View */
+        #page-dashboard {
+            padding: 40px;
+            overflow-y: auto;
+            background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.05), transparent);
+        }
+
+        .dashboard-header {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 32px;
+            letter-spacing: -0.5px;
+        }
+
+        .market-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .market-card {
+            background: var(--bg-pane);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 24px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .market-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent-primary);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .card-symbol {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .card-price {
+            font-family: 'JetBrains Mono', monospace;
             font-size: 24px;
             font-weight: 500;
+            margin-bottom: 20px;
         }
 
-        .controls {
+        .trend-labels {
             display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
+            gap: 8px;
             flex-wrap: wrap;
         }
 
-        .controls label {
-            font-size: 14px;
-            color: #787b86;
+        .tf-pill {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--glass-border);
         }
 
-        .controls input[type="date"] {
-            background-color: #1e222d;
-            border: 1px solid #2b2b43;
-            color: #d1d4dc;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 14px;
+        .trend-up {
+            color: var(--price-up);
+            border-color: var(--price-up);
+            background: rgba(16, 185, 129, 0.1);
         }
 
-        .controls button {
-            background-color: #2962ff;
+        .trend-down {
+            color: var(--price-down);
+            border-color: var(--price-down);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        /* Chart Page Premium Toolbar */
+        .chart-header {
+            height: 64px;
+            background: var(--bg-header);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            justify-content: space-between;
+            flex-shrink: 0;
+            z-index: 50;
+        }
+
+        .toolbar {
+            height: 52px;
+            background: var(--bg-pane);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 20px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-right: 1px solid var(--glass-border);
+            padding-right: 20px;
+        }
+
+        .tool-group:last-child {
+            border: none;
+        }
+
+        .tool-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .custom-select {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .custom-select:hover {
+            border-color: var(--accent-primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .p-btn {
+            background: var(--accent-primary);
             color: white;
             border: none;
-            padding: 8px 20px;
-            border-radius: 4px;
-            font-size: 14px;
+            padding: 8px 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.2s;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            transition: all 0.2s;
         }
 
-        .controls button:hover {
-            background-color: #1e53e5;
+        .p-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
         }
 
-        .controls button:active {
-            background-color: #1948cc;
+        /* Chart Grid with Premium Spacing */
+        #chart-container-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(700px, 1fr));
+            grid-auto-rows: 900px;
+            gap: 32px;
+            padding: 32px;
+            overflow-y: auto;
+            flex: 1;
+            background: var(--bg-deep);
         }
 
-        #chart {
-            width: 100%;
-            height: 600px;
-            background-color: #1e222d;
-            border-radius: 8px;
+        .pane {
+            background: var(--bg-pane);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            position: relative;
         }
 
-        .info {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 14px;
-            color: #787b86;
+        .pane-header {
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid var(--glass-border);
         }
 
-        .loading {
-            text-align: center;
-            padding: 20px;
-            font-size: 16px;
-            color: #787b86;
+        .pane-title {
+            font-weight: 700;
+            color: var(--text-main);
+            font-size: 15px;
+        }
+
+        .pane-badge {
+            background: var(--glass-bg);
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .charts-area {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            gap: 4px;
+            padding: 4px;
+        }
+
+        .chart-wrapper {
+            background: #131722;
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .main-chart-wrapper {
+            flex: 1;
+        }
+
+        .sub-chart-wrapper {
+            height: 180px;
+        }
+
+        .pane-loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(11, 14, 20, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .premium-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--glass-bg);
+            border-top: 4px solid var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Error Toast */
+        #global-error-display {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            right: 24px;
+            background: var(--price-down);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(239, 68, 68, 0.4);
+            font-weight: 600;
+            display: none;
+            z-index: 10000;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
     </style>
 </head>
 
 <body>
-    <h1>EURUSD - 1分足チャート</h1>
-
-    <div class="indicator-menu">
-        <div class="timeframe-selector">
-            <select id="timeframe">
-                <option value="1">1分足 (1m)</option>
-                <option value="5">5分足 (5m)</option>
-                <option value="15">15分足 (15m)</option>
-                <option value="30">30分足 (30m)</option>
-                <option value="60">1時間足 (1h)</option>
-                <option value="240">4時間足 (4h)</option>
-                <option value="1440">日足 (1d)</option>
-            </select>
+    <nav class="sidebar">
+        <div class="logo-area">
+            <div class="logo-icon">FL</div>
         </div>
-        <label><input type="checkbox" id="check-sma20" checked> SMA(1) <input type="number" id="param-sma20" value="20"
-                min="1" max="200"></label>
-        <label><input type="checkbox" id="check-sma50"> SMA(2) <input type="number" id="param-sma50" value="50" min="1"
-                max="200"></label>
-        <label><input type="checkbox" id="check-bb" checked> BB(σ) <input type="number" id="param-bb-period" value="20"
-                min="1" max="100"> dev <input type="number" id="param-bb-dev" value="2" min="0.1" step="0.1"
-                max="5"></label>
-        <label><input type="checkbox" id="check-rsi" checked> RSI <input type="number" id="param-rsi" value="14" min="1"
-                max="100"></label>
-        <label><input type="checkbox" id="check-macd" checked> MACD <input type="number" id="param-macd-fast" value="12"
-                min="1"> <input type="number" id="param-macd-slow" value="26" min="1"> <input type="number"
-                id="param-macd-signal" value="9" min="1"></label>
-        <label style="background-color: #4338ca;"><input type="checkbox" id="check-dow" checked> Dow <input
-                type="number" id="param-dow" value="5" min="1" max="50"></label>
-
-        <div class="view-settings">
-            <select id="scale-type">
-                <option value="auto">自動調整 (Auto)</option>
-                <option value="fixed">領域固定 (Fixed)</option>
-            </select>
-            <select id="price-mode">
-                <option value="linear">線形 (Linear)</option>
-                <option value="log">対数 (Log)</option>
-            </select>
+        <div class="nav-item active" data-page="dashboard" title="Dashboard">
+            <svg viewBox="0 0 24 24">
+                <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+            </svg>
         </div>
-    </div>
-
-    <style>
-        .view-settings {
-            display: flex;
-            gap: 10px;
-            margin-left: auto;
-            border-left: 1px solid #363c4e;
-            padding-left: 15px;
-        }
-
-        .view-settings select {
-            background-color: #2b2b43;
-            color: #d1d4dc;
-            border: 1px solid #363c4e;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 13px;
-            cursor: pointer;
-            outline: none;
-        }
-
-        .view-settings select:hover {
-            border-color: #2962ff;
-        }
-    </style>
-
-    <div id="chart-container">
-        <div id="main-area" class="chart-wrapper">
-            <div id="chart"></div>
+        <div class="nav-item" data-page="charts" title="Analysis">
+            <svg viewBox="0 0 24 24">
+                <path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z" />
+            </svg>
         </div>
-        <div id="rsi-area" class="chart-wrapper sub">
-            <div id="rsi-chart"></div>
+        <div class="nav-item" title="Insights" style="margin-top: auto;">
+            <svg viewBox="0 0 24 24">
+                <path
+                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+            </svg>
         </div>
-        <div id="macd-area" class="chart-wrapper sub">
-            <div id="macd-chart"></div>
+    </nav>
+
+    <main class="main-content">
+        <!-- Dashboard Premium View -->
+        <div id="page-dashboard" class="page-container active">
+            <div class="dashboard-header">Market Pulse</div>
+            <div id="overview-grid" class="market-grid">
+                <!-- Market Cards will be injected here -->
+            </div>
         </div>
-    </div>
 
-    <div id="status-msg" class="loading" style="display: none;"></div>
-    <div class="info">
-        スクロールすると過去のデータを自動的に読み込みます (Powered by Dukascopy)
-    </div>
+        <!-- Analysis Premium View -->
+        <div id="page-charts" class="page-container">
+            <div class="chart-header">
+                <div style="font-size: 18px; font-weight: 800; letter-spacing: -0.5px;">PRO ANALYSIS</div>
+                <button id="add-pane-btn" class="p-btn">+ New Workspace</button>
+            </div>
 
-    <style>
-        .indicator-menu {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
-            background-color: #1e222d;
-            padding: 12px;
-            border-radius: 8px;
-            flex-wrap: wrap;
-            border: 1px solid #2b2b43;
-        }
+            <div class="toolbar">
+                <div class="tool-group">
+                    <span class="tool-label">Moving Averages</span>
+                    <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" id="check-sma20" checked> SMA 1
+                        <input type="number" id="param-sma20" value="20"
+                            style="width:40px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                    </label>
+                    <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" id="check-sma50"> SMA 2
+                        <input type="number" id="param-sma50" value="50"
+                            style="width:40px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                    </label>
+                    <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" id="check-bb"> BB
+                        <input type="number" id="param-bb-period" value="20" title="Period"
+                            style="width:35px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                        <input type="number" id="param-bb-dev" value="2" title="Deviation"
+                            style="width:30px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                    </label>
+                </div>
+                <div class="tool-group">
+                    <span class="tool-label">Oscillators</span>
+                    <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" id="check-rsi"> RSI
+                        <input type="number" id="param-rsi" value="14"
+                            style="width:35px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                    </label>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="check-macd"> MACD 1
+                            <input type="number" id="param-macd-fast" value="12" title="Fast"
+                                style="width:30px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                            <input type="number" id="param-macd-slow" value="26" title="Slow"
+                                style="width:30px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                            <input type="number" id="param-macd-signal" value="9" title="Signal"
+                                style="width:30px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                        </label>
+                        <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="check-macd2"> MACD 2
+                            <input type="number" id="param-macd2-fast" value="19" title="Fast"
+                                style="width:30px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                            <input type="number" id="param-macd2-slow" value="39" title="Slow"
+                                style="width:30px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                            <input type="number" id="param-macd2-signal" value="9" title="Signal"
+                                style="width:30px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                        </label>
+                    </div>
+                </div>
+                <div class="tool-group">
+                    <span class="tool-label">Theory</span>
+                    <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" id="check-dow" checked> Dow
+                        <input type="number" id="param-dow" value="5" title="Period"
+                            style="width:30px; background:#1e222d; border:1px solid #2b2b43; color:#fff; border-radius:4px; padding:2px;">
+                    </label>
+                </div>
+            </div>
 
-        .indicator-menu label {
-            font-size: 13px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            padding: 4px 8px;
-            background-color: #2b2b43;
-            border-radius: 4px;
-            white-space: nowrap;
-        }
+            <div id="chart-container-grid">
+                <!-- Premium Panes will be injected here -->
+            </div>
+        </div>
+    </main>
 
-        .timeframe-selector {
-            border-right: 1px solid #363c4e;
-            padding-right: 15px;
-            margin-right: 5px;
-        }
+    <div id="global-error-display"></div>
 
-        .timeframe-selector select {
-            background-color: #2962ff;
-            color: white;
-            border: none;
-            padding: 5px 12px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: bold;
-            cursor: pointer;
-            outline: none;
-        }
+    <template id="pane-template">
+        <div class="pane">
+            <div class="pane-header">
+                <select class="custom-select symbol-select">
+                    <option value="EURUSD">EURUSD</option>
+                    <option value="USDJPY">USDJPY</option>
+                    <option value="GBPUSD">GBPUSD</option>
+                    <option value="EURJPY">EURJPY</option>
+                </select>
+                <select class="custom-select timeframe-select">
+                    <option value="1">1m</option>
+                    <option value="5" selected>5m</option>
+                    <option value="15">15m</option>
+                    <option value="60">1h</option>
+                    <option value="240">4h</option>
+                </select>
+                <input type="date" class="custom-select date-picker" value="2025-04-01">
+                <label style="font-size:12px; display:flex; align-items:center; gap:6px; color:var(--text-muted);">
+                    <input type="checkbox" class="check-sync-scroll"> Sync
+                </label>
+                <div class="pane-badge trend-badge">SYNCHRONIZED</div>
+                <button class="remove-pane-btn"
+                    style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:24px; margin-left:auto;">&times;</button>
+            </div>
+            <div class="charts-area">
+                <div class="chart-wrapper main-chart-wrapper">
+                    <div class="chart-container-el"></div>
+                </div>
+                <div class="chart-wrapper rsi-chart-wrapper sub-chart-wrapper" style="display:none;">
+                    <div class="rsi-chart-el"></div>
+                </div>
+                <div class="chart-wrapper macd-chart-wrapper sub-chart-wrapper" style="display:none;">
+                    <div class="macd-chart-el"></div>
+                </div>
+                <div class="chart-wrapper macd2-chart-wrapper sub-chart-wrapper" style="display:none;">
+                    <div class="macd2-chart-el"></div>
+                </div>
+            </div>
+            <div class="pane-loading-overlay">
+                <div class="premium-spinner"></div>
+            </div>
+        </div>
+    </template>
 
-        .timeframe-selector select:hover {
-            background-color: #1e53e5;
-        }
-
-        .indicator-menu input[type="number"] {
-            width: 45px;
-            background-color: #131722;
-            border: 1px solid #363c4e;
-            color: #d1d4dc;
-            padding: 1px 4px;
-            border-radius: 3px;
-            font-size: 12px;
-            outline: none;
-        }
-
-        .indicator-menu input[type="number"]:focus {
-            border-color: #2962ff;
-        }
-
-        #chart-container {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            min-height: 800px;
-        }
-
-        .chart-wrapper {
-            position: relative;
-            width: 100%;
-            background-color: #1e222d;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid #2b2b43;
-        }
-
-        #chart {
-            height: 450px;
-        }
-
-        .sub {
-            height: 150px;
-        }
-
-        #rsi-chart,
-        #macd-chart {
-            height: 100%;
-            width: 100%;
-        }
-    </style>
-
-    <!-- Lightweight Charts CDN -->
-    <script
-        src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
-
-    <!-- チャート描画スクリプト (キャッシュ回避のためバージョン付与) -->
-    <script src="main.js?v=24"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="main.js"></script>
 </body>
 
 </html>

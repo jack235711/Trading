@@ -1,0 +1,13 @@
+# 大容量データディレクトリを除外
+data/
+
+# Pythonキャッシュ
+__pycache__/
+*.pyc
+
+# OS固有ファイル
+.DS_Store
+Thumbs.db
+
+# ログ等
+*.log

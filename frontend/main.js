@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let allData = [];
     let earliestDate = new Date('2025-01-29');
     let isLoading = false;
+    let isSyncing = false;
+    const syncChannel = new BroadcastChannel('chart_sync');
 
     // シリーズ保持
     let mainChart, rsiChart, macdChart;
@@ -14,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let sma20Series, sma50Series, bbUpperSeries, bbLowerSeries;
     let rsiSeries, rsi70Series, rsi30Series;
     let macdSeries, macdSignalSeries, macdHistogramSeries;
+    let dowSeries;
 
     function showStatus(msg, isError = false) {
         statusMsg.innerText = msg;
@@ -40,68 +43,133 @@ document.addEventListener('DOMContentLoaded', () => {
 
         candlestickSeries = mainChart.addCandlestickSeries({
             upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
-            priceFormat: priceFormat5
+            priceFormat: priceFormat5,
+            priceLineVisible: false
         });
-        sma20Series = mainChart.addLineSeries({ color: '#2962FF', lineWidth: 1, title: 'SMA 1', priceFormat: priceFormat5 });
-        sma50Series = mainChart.addLineSeries({ color: '#FF6D00', lineWidth: 1, title: 'SMA 2', priceFormat: priceFormat5 });
-        bbUpperSeries = mainChart.addLineSeries({ color: 'rgba(38, 166, 154, 0.4)', lineWidth: 1, lineStyle: 2, priceFormat: priceFormat5 });
-        bbLowerSeries = mainChart.addLineSeries({ color: 'rgba(38, 166, 154, 0.4)', lineWidth: 1, lineStyle: 2, priceFormat: priceFormat5 });
+        sma20Series = mainChart.addLineSeries({ color: '#2962FF', lineWidth: 1, title: 'SMA 1', priceLineVisible: false, priceFormat: priceFormat5 });
+        sma50Series = mainChart.addLineSeries({ color: '#FF6D00', lineWidth: 1, title: 'SMA 2', priceLineVisible: false, priceFormat: priceFormat5 });
+        bbUpperSeries = mainChart.addLineSeries({ color: 'rgba(38, 166, 154, 0.4)', lineWidth: 1, priceLineVisible: false, priceFormat: priceFormat5 });
+        bbLowerSeries = mainChart.addLineSeries({ color: 'rgba(38, 166, 154, 0.4)', lineWidth: 1, priceLineVisible: false, priceFormat: priceFormat5 });
+        dowSeries = mainChart.addLineSeries({ color: '#facc15', lineWidth: 1, lineStyle: 2, title: 'Dow', priceLineVisible: false, priceFormat: priceFormat5 });
 
         // RSIチャート
         rsiChart = LightweightCharts.createChart(document.getElementById('rsi-chart'), { ...options, height: 150 });
-        rsiSeries = rsiChart.addLineSeries({ color: '#f7702d', lineWidth: 2, title: 'RSI' });
-        rsi70Series = rsiChart.addLineSeries({ color: 'rgba(239, 83, 80, 0.3)', lineWidth: 1, lineStyle: 2 });
-        rsi30Series = rsiChart.addLineSeries({ color: 'rgba(38, 166, 154, 0.3)', lineWidth: 1, lineStyle: 2 });
+        rsiSeries = rsiChart.addLineSeries({ color: '#f7702d', lineWidth: 2, title: 'RSI', priceLineVisible: false });
+        rsi70Series = rsiChart.addLineSeries({ color: 'rgba(239, 83, 80, 0.3)', lineWidth: 1, priceLineVisible: false });
+        rsi30Series = rsiChart.addLineSeries({ color: 'rgba(38, 166, 154, 0.3)', lineWidth: 1, priceLineVisible: false });
 
         // MACDチャート
         macdChart = LightweightCharts.createChart(document.getElementById('macd-chart'), { ...options, height: 150 });
         const macdFormat = { type: 'price', precision: 6, minMove: 0.000001 };
+        macdSeries = macdChart.addLineSeries({ color: '#2962ff', lineWidth: 1, title: 'MACD', priceLineVisible: false, priceFormat: macdFormat });
+        macdSignalSeries = macdChart.addLineSeries({ color: '#ff6d00', lineWidth: 1, title: 'Signal', priceLineVisible: false, priceFormat: macdFormat });
+        macdHistogramSeries = macdChart.addHistogramSeries({ color: '#26a69a', base: 0, priceLineVisible: false, priceFormat: macdFormat });
 
-        macdSeries = macdChart.addLineSeries({ color: '#2962ff', lineWidth: 1, title: 'MACD', priceFormat: macdFormat });
-        macdSignalSeries = macdChart.addLineSeries({ color: '#ff6d00', lineWidth: 1, title: 'Signal', priceFormat: macdFormat });
-        macdHistogramSeries = macdChart.addHistogramSeries({ color: '#26a69a', base: 0, priceFormat: macdFormat });
+        // レイアウト同期: 価格目盛りの幅を 100px に固定
+        [mainChart, rsiChart, macdChart].forEach(c => {
+            c.priceScale('right').applyOptions({ minimumWidth: 100, maximumWidth: 100 });
+        });
 
         // 同期ロジック
-        [mainChart, rsiChart, macdChart].forEach(c => {
+        const charts = [mainChart, rsiChart, macdChart];
+        const seriesList = [candlestickSeries, rsiSeries, macdSeries];
+        const targetPrices = [null, 50, 0];
+
+        charts.forEach((c, index) => {
+            // 時間軸の同期 (LogicalRangeを使用することで、未ロード領域でも安定して同期)
             c.timeScale().subscribeVisibleLogicalRangeChange(range => {
-                [mainChart, rsiChart, macdChart].forEach(target => {
-                    if (target !== c) target.timeScale().setVisibleLogicalRange(range);
+                if (isSyncing || !range) return;
+                isSyncing = true;
+
+                charts.forEach(target => {
+                    if (target !== c) {
+                        target.timeScale().setVisibleLogicalRange(range);
+                    }
                 });
+
+                // 他のタブを同期するためのデータをブロードキャスト (これはTimeRangeで行うのが一般的)
+                const timeRange = c.timeScale().getVisibleRange();
+                if (timeRange) {
+                    syncChannel.postMessage({
+                        type: 'range',
+                        range: timeRange
+                    });
+                }
+
+                isSyncing = false;
+            });
+
+            // 十字カーソルの同期
+            c.subscribeCrosshairMove(param => {
+                if (isSyncing) return;
+                isSyncing = true;
+
+                const time = param.time;
+                charts.forEach((target, tIdx) => {
+                    if (target === c) return;
+
+                    if (!time) {
+                        target.setCrosshairPosition(0, 0, seriesList[tIdx]);
+                    } else {
+                        // 価格位置。メインチャート以外は固定位置(中央など)に表示
+                        const price = targetPrices[tIdx] === null ? (param.point ? param.point.y : 0) : targetPrices[tIdx];
+                        target.setCrosshairPosition(price, time, seriesList[tIdx]);
+                    }
+                });
+
+                // 他のタブを同期
+                syncChannel.postMessage({
+                    type: 'crosshair',
+                    time: time || null
+                });
+
+                isSyncing = false;
             });
         });
 
+        // データの追加読み込み (メインチャートのスクロールを検知)
         mainChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
             if (range && range.from < 50 && !isLoading) fetchMoreData();
         });
-    }
-    let aggregatedCache = {}; // 時間足ごとのキャッシュ { timeframe: data }
 
-    // データを任意の時間足に集計 (キャッシュ対応)
+        // 他のタブからの同期メッセージをリッスン
+        syncChannel.onmessage = (event) => {
+            if (isSyncing) return;
+            isSyncing = true;
+
+            const { type, range, time } = event.data;
+
+            if (type === 'range' && range) {
+                charts.forEach(c => c.timeScale().setVisibleRange(range));
+            } else if (type === 'crosshair') {
+                charts.forEach((target, tIdx) => {
+                    if (!time) {
+                        target.setCrosshairPosition(0, 0, seriesList[tIdx]);
+                    } else {
+                        const price = targetPrices[tIdx] === null ? 0 : targetPrices[tIdx];
+                        target.setCrosshairPosition(price, time, seriesList[tIdx]);
+                    }
+                });
+            }
+
+            isSyncing = false;
+        };
+    }
+
+    let aggregatedCache = {};
     function aggregateData(data, timeframeMinutes) {
         if (timeframeMinutes === 1) return data;
-
-        // キャッシュに存在し、かつデータ長が同じ場合は再利用
         const cacheKey = timeframeMinutes;
-        if (aggregatedCache[cacheKey] && aggregatedCache[cacheKey].sourceLength === data.length) {
-            return aggregatedCache[cacheKey].data;
-        }
-
+        if (aggregatedCache[cacheKey] && aggregatedCache[cacheKey].sourceLength === data.length) return aggregatedCache[cacheKey].data;
         const result = [];
         const interval = timeframeMinutes * 60;
-
         let currentBar = null;
         for (let i = 0; i < data.length; i++) {
             const item = data[i];
             const barTime = Math.floor(item.time / interval) * interval;
             if (!currentBar || currentBar.time !== barTime) {
                 if (currentBar) result.push(currentBar);
-                currentBar = {
-                    time: barTime,
-                    open: item.open,
-                    high: item.high,
-                    low: item.low,
-                    close: item.close
-                };
+                currentBar = { time: barTime, open: item.open, high: item.high, low: item.low, close: item.close };
             } else {
                 currentBar.high = Math.max(currentBar.high, item.high);
                 currentBar.low = Math.min(currentBar.low, item.low);
@@ -109,24 +177,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         if (currentBar) result.push(currentBar);
-
-        // キャッシュに保存
-        aggregatedCache[cacheKey] = {
-            data: result,
-            sourceLength: data.length
-        };
-
+        aggregatedCache[cacheKey] = { data: result, sourceLength: data.length };
         return result;
     }
 
     let calculationTimeout = null;
     function calculateIndicators(data) {
         if (!data || data.length === 0) return;
-
-        // 連続呼び出しを抑制 (Debounce)
         if (calculationTimeout) clearTimeout(calculationTimeout);
         calculationTimeout = setTimeout(() => {
-            // パネル表示制御とリサイズ
             const updatePanel = (checkId, areaEl, chartObj) => {
                 const show = document.getElementById(checkId).checked;
                 const currentDisplay = areaEl.style.display;
@@ -139,24 +198,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const timeframe = parseInt(document.getElementById('timeframe').value) || 1;
             const aggrData = aggregateData(data, timeframe);
-
             candlestickSeries.setData(aggrData);
 
             const n = aggrData.length;
-            const closes = new Float64Array(n);
-            const times = new Int32Array(n);
-            for (let i = 0; i < n; i++) {
-                closes[i] = aggrData[i].close;
-                times[i] = aggrData[i].time;
-            }
+            const highs = aggrData.map(d => d.high);
+            const lows = aggrData.map(d => d.low);
+            const closes = aggrData.map(d => d.close);
+            const times = aggrData.map(d => d.time);
 
-            // DOMアクセスを一度にまとめる
             const checks = {
                 sma1: document.getElementById('check-sma20').checked,
                 sma2: document.getElementById('check-sma50').checked,
                 bb: document.getElementById('check-bb').checked,
                 rsi: document.getElementById('check-rsi').checked,
-                macd: document.getElementById('check-macd').checked
+                macd: document.getElementById('check-macd').checked,
+                dow: document.getElementById('check-dow').checked
             };
             const params = {
                 sma1: parseInt(document.getElementById('param-sma20').value) || 20,
@@ -166,15 +222,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 rsiP: parseInt(document.getElementById('param-rsi').value) || 14,
                 mF: parseInt(document.getElementById('param-macd-fast').value) || 12,
                 mS: parseInt(document.getElementById('param-macd-slow').value) || 26,
-                mSig: parseInt(document.getElementById('param-macd-signal').value) || 9
+                mSig: parseInt(document.getElementById('param-macd-signal').value) || 9,
+                dowP: parseInt(document.getElementById('param-dow').value) || 5
             };
 
             const calcSMA = p => {
                 const results = [];
-                for (let i = p - 1; i < n; i++) {
-                    let sum = 0;
-                    for (let j = 0; j < p; j++) sum += closes[i - j];
-                    results.push({ time: times[i], value: sum / p });
+                for (let i = 0; i < n; i++) {
+                    if (i < p - 1) results.push({ time: times[i] });
+                    else {
+                        let sum = 0;
+                        for (let j = 0; j < p; j++) sum += closes[i - j];
+                        results.push({ time: times[i], value: sum / p });
+                    }
                 }
                 return results;
             };
@@ -182,11 +242,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const calcEMA = (p, sourceData = closes) => {
                 const results = [];
                 const k = 2 / (p + 1);
-                let ema = sourceData[0]; // Initialize with the first value
+                let ema = null;
                 for (let i = 0; i < n; i++) {
-                    // Ensure sourceData[i] exists, otherwise use previous ema
-                    const currentVal = sourceData[i] !== undefined ? sourceData[i] : ema;
-                    ema = (currentVal * k) + (ema * (1 - k));
+                    const val = typeof sourceData[i] === 'object' ? sourceData[i].value : sourceData[i];
+                    if (val === undefined || val === null) { results.push({ time: times[i] }); continue; }
+                    if (ema === null) ema = val;
+                    else ema = (val * k) + (ema * (1 - k));
                     results.push({ time: times[i], value: ema });
                 }
                 return results;
@@ -198,49 +259,61 @@ document.addEventListener('DOMContentLoaded', () => {
             if (checks.bb) {
                 const p = params.bbP, d = params.bbD;
                 const up = [], lo = [];
-                for (let i = p - 1; i < n; i++) {
-                    let sum = 0, sqSum = 0;
-                    for (let j = 0; j < p; j++) {
-                        const val = closes[i - j];
-                        sum += val;
-                        sqSum += val * val;
+                for (let i = 0; i < n; i++) {
+                    if (i < p - 1) { up.push({ time: times[i] }); lo.push({ time: times[i] }); }
+                    else {
+                        let sum = 0, sqSum = 0;
+                        for (let j = 0; j < p; j++) { const val = closes[i - j]; sum += val; sqSum += val * val; }
+                        const avg = sum / p;
+                        const std = Math.sqrt(Math.max(0, (sqSum / p) - (avg * avg)));
+                        up.push({ time: times[i], value: avg + d * std }); lo.push({ time: times[i], value: avg - d * std });
                     }
-                    const avg = sum / p;
-                    const std = Math.sqrt(Math.max(0, (sqSum / p) - (avg * avg)));
-                    up.push({ time: times[i], value: avg + d * std });
-                    lo.push({ time: times[i], value: avg - d * std });
                 }
                 bbUpperSeries.setData(up); bbLowerSeries.setData(lo);
             } else { bbUpperSeries.setData([]); bbLowerSeries.setData([]); }
 
             if (updatePanel('check-rsi', rsiWrapper, rsiChart)) {
-                const p = params.rsiP;
-                const rsi = [];
-                for (let i = p; i < n; i++) {
-                    let g = 0, l = 0;
-                    for (let j = i - p + 1; j <= i; j++) {
-                        const diff = closes[j] - closes[j - 1];
-                        if (diff >= 0) g += diff; else l -= diff;
+                const p = params.rsiP, rsi = [];
+                for (let i = 0; i < n; i++) {
+                    if (i < p) rsi.push({ time: times[i] });
+                    else {
+                        let g = 0, l = 0;
+                        for (let j = i - p + 1; j <= i; j++) { const diff = closes[j] - closes[j - 1]; if (diff >= 0) g += diff; else l -= diff; }
+                        rsi.push({ time: times[i], value: 100 - (100 / (1 + (g / (l || 0.0001)))) });
                     }
-                    rsi.push({ time: times[i], value: 100 - (100 / (1 + (g / (l || 0.0001)))) });
                 }
                 rsiSeries.setData(rsi);
-                const bg = rsi.map(d => ({ time: d.time, value: 70 }));
-                rsi70Series.setData(bg);
-                rsi30Series.setData(bg.map(d => ({ ...d, value: 30 })));
+                const bg = times.map(t => ({ time: t, value: 70 }));
+                rsi70Series.setData(bg); rsi30Series.setData(bg.map(d => ({ ...d, value: 30 })));
             }
-
             if (checks.macd && updatePanel('check-macd', macdWrapper, macdChart)) {
                 const fEma = calcEMA(params.mF), sEma = calcEMA(params.mS);
-                const macdLine = fEma.map((f, i) => ({ time: f.time, value: f.value - sEma[i].value }));
-                const sigLine = calcEMA(params.mSig, macdLine.map(m => m.value));
+                const macdLine = fEma.map((f, i) => ({ time: f.time, value: (f.value !== undefined && sEma[i].value !== undefined) ? f.value - sEma[i].value : undefined }));
+                const sigLine = calcEMA(params.mSig, macdLine);
                 const hist = macdLine.map((m, i) => {
-                    const val = m.value - sigLine[i].value;
+                    const val = (m.value !== undefined && sigLine[i].value !== undefined) ? m.value - sigLine[i].value : undefined;
                     return { time: times[i], value: val, color: val >= 0 ? '#26a69a' : '#ef5350' };
                 });
                 macdSeries.setData(macdLine); macdSignalSeries.setData(sigLine); macdHistogramSeries.setData(hist);
             }
-        }, 50); // 50msのバッファ
+            if (checks.dow) {
+                const p = params.dowP, zigzags = [], markers = [];
+                let lastPoint = null;
+                for (let i = p; i < n - p; i++) {
+                    const ch = highs[i], cl = lows[i];
+                    let isH = true, isL = true;
+                    for (let j = 1; j <= p; j++) { if (highs[i - j] >= ch || highs[i + j] > ch) isH = false; if (lows[i - j] <= cl || lows[i + j] < cl) isL = false; }
+                    if (isH && (!lastPoint || lastPoint.type === 'low' || ch > lastPoint.value)) {
+                        const pt = { time: times[i], value: ch, type: 'high' }; if (lastPoint && lastPoint.type === 'high') zigzags.pop();
+                        zigzags.push(pt); markers.push({ time: times[i], position: 'aboveBar', color: '#eab308', shape: 'arrowDown', text: 'H' }); lastPoint = pt;
+                    } else if (isL && (!lastPoint || lastPoint.type === 'high' || cl < lastPoint.value)) {
+                        const pt = { time: times[i], value: cl, type: 'low' }; if (lastPoint && lastPoint.type === 'low') zigzags.pop();
+                        zigzags.push(pt); markers.push({ time: times[i], position: 'belowBar', color: '#6366f1', shape: 'arrowUp', text: 'L' }); lastPoint = pt;
+                    }
+                }
+                dowSeries.setData(zigzags); candlestickSeries.setMarkers(markers);
+            } else { dowSeries.setData([]); candlestickSeries.setMarkers([]); }
+        }, 50);
     }
 
     async function fetchMoreData() {
@@ -257,27 +330,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 allData = [...formatted, ...allData].sort((a, b) => a.time - b.time);
                 const unique = []; let last = null; for (const d of allData) { if (d.time !== last) { unique.push(d); last = d.time; } }
                 allData = unique;
-                aggregatedCache = {}; // データが更新されたのでキャッシュをクリア
+                aggregatedCache = {};
                 calculateIndicators(allData);
             }
             earliestDate = targetDate; isLoading = false; hideStatus();
-            if (newData.length === 0 && earliestDate > new Date('2025-01-01')) {
-                // データがない場合は少し待ってから次を試行（サーバー負荷とブラウザのハング防止）
-                setTimeout(() => fetchMoreData(), 100);
-            }
-        } catch (e) {
-            showStatus(`サーバー接続エラー: ${e.message}`, true);
-            isLoading = false;
-            // エラー時は自動再開せず、ユーザーの操作を待つ
-        }
+            if (newData.length === 0 && earliestDate > new Date('2025-01-01')) setTimeout(() => fetchMoreData(), 100);
+        } catch (e) { showStatus(`サーバー接続エラー: ${e.message}`, true); isLoading = false; }
     }
 
     async function initialLoad() {
         initCharts();
-        // 現在ダウンロード済みの最新データ（2月〜3月等）も表示できるよう、将来の日付から遡って検索を開始
         earliestDate = new Date('2025-04-01');
-        for (let i = 0; i < 5; i++) await fetchMoreData();
-        mainChart.timeScale().fitContent();
+        // 初期データを数日分読み込む
+        for (let i = 0; i < 3; i++) await fetchMoreData();
+
+        // すべてのチャートの表示範囲を揃える
+        const mainRange = mainChart.timeScale().getVisibleRange();
+        if (mainRange) {
+            [rsiChart, macdChart].forEach(c => c.timeScale().setVisibleRange(mainRange));
+        }
     }
 
     window.addEventListener('resize', () => {
@@ -285,33 +356,23 @@ document.addEventListener('DOMContentLoaded', () => {
         [mainChart, rsiChart, macdChart].forEach(c => c.resize(w, c.options ? c.options().height : undefined));
     });
 
-    // スケール・表示設定の更新
     function updateChartSettings() {
         const scaleType = document.getElementById('scale-type').value;
         const priceMode = document.getElementById('price-mode').value;
-
         const isAuto = scaleType === 'auto';
         const mode = priceMode === 'log' ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal;
-
-        mainChart.priceScale('right').applyOptions({
-            autoScale: isAuto,
-            mode: mode
-        });
+        mainChart.priceScale('right').applyOptions({ autoScale: isAuto, mode: mode });
     }
 
-    const inputs = ['check-sma20', 'check-sma50', 'check-bb', 'check-rsi', 'check-macd', 'param-sma20', 'param-sma50', 'param-bb-period', 'param-bb-dev', 'param-rsi', 'param-macd-fast', 'param-macd-slow', 'param-macd-signal'];
-    inputs.forEach(id => {
+    const inputIds = ['check-sma20', 'check-sma50', 'check-bb', 'check-rsi', 'check-macd', 'check-dow', 'param-sma20', 'param-sma50', 'param-bb-period', 'param-bb-dev', 'param-rsi', 'param-macd-fast', 'param-macd-slow', 'param-macd-signal', 'param-dow'];
+    inputIds.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', () => calculateIndicators(allData));
     });
 
-    // 時間足・スケール設定のイベントリスナー
     ['timeframe', 'scale-type', 'price-mode'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.addEventListener('change', () => {
-            if (id === 'timeframe') calculateIndicators(allData);
-            else updateChartSettings();
-        });
+        if (el) el.addEventListener('change', () => { if (id === 'timeframe') calculateIndicators(allData); else updateChartSettings(); });
     });
 
     initialLoad();

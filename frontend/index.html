@@ -118,6 +118,8 @@
         <label><input type="checkbox" id="check-macd" checked> MACD <input type="number" id="param-macd-fast" value="12"
                 min="1"> <input type="number" id="param-macd-slow" value="26" min="1"> <input type="number"
                 id="param-macd-signal" value="9" min="1"></label>
+        <label style="background-color: #4338ca;"><input type="checkbox" id="check-dow" checked> Dow <input
+                type="number" id="param-dow" value="5" min="1" max="50"></label>
 
         <div class="view-settings">
             <select id="scale-type">
@@ -272,7 +274,7 @@
         src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 
     <!-- チャート描画スクリプト (キャッシュ回避のためバージョン付与) -->
-    <script src="main.js?v=9"></script>
+    <script src="main.js?v=24"></script>
 </body>
 
 </html>

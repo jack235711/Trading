@@ -8,7 +8,7 @@ import time
 from tqdm import tqdm
 
 # Settings
-PAIRS = ["EURUSD", "USDJPY", "GBPUSD", "EURJPY", "EURGBP"]
+PAIRS = ["GBPJPY"]
 START_YEAR = 2000
 END_YEAR = 2025
 BASE_DIR = Path("../data")
@@ -57,6 +57,8 @@ def process_year_block(year):
     
     all_tasks = []
     
+    results = {'downloaded': 0, 'skipped': 0, 'not_found': 0, 'failed': 0}
+    
     for pair in PAIRS:
         start_date = datetime(year, 1, 1)
         end_date = datetime(year, 12, 31)
@@ -67,14 +69,24 @@ def process_year_block(year):
             day = current.day
             save_dir = BASE_DIR / pair / str(year) / f"{month:02d}" / f"{day:02d}"
             
+            # Efficient skip: if directory has 24 files, skip the whole day
+            if save_dir.exists():
+                existing_files = list(save_dir.glob("*.bi5"))
+                if len(existing_files) >= 24:
+                    results['skipped'] += 24
+                    current += timedelta(days=1)
+                    continue
+            
             for h in range(24):
                 all_tasks.append((pair, current, h, save_dir))
             
             current += timedelta(days=1)
 
-    print(f"Total files for {year}: {len(all_tasks)}")
+    print(f"Total tasks for {year}: {len(all_tasks)} (Already skipped {results['skipped']} files)")
     
-    results = {'downloaded': 0, 'skipped': 0, 'not_found': 0, 'failed': 0}
+    if not all_tasks:
+        print(f"Year {year} already fully downloaded.")
+        return
     
     # Process all pairs for this year in parallel
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:

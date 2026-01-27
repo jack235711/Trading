@@ -15,9 +15,16 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import sys
 
 # 設定
-DATA_DIR = Path("../data")
-PARQUET_DIR = Path("../parquet_data")
-PAIRS = ["EURUSD", "USDJPY", "GBPUSD", "EURJPY", "EURGBP", "AUDUSD"]
+SCRIPT_DIR = Path(__file__).parent
+DATA_DIR = (SCRIPT_DIR / "../data").resolve()
+PARQUET_DIR = (SCRIPT_DIR / "../parquet_data").resolve()
+
+
+def get_all_pairs():
+    """dataディレクトリ配下のサブディレクトリをスキャンして通貨ペアリストを取得"""
+    if not DATA_DIR.exists():
+        return []
+    return [d.name for d in DATA_DIR.iterdir() if d.is_dir() and not d.name.startswith('.')]
 
 
 def convert_day_to_parquet(args):
@@ -152,7 +159,8 @@ def main():
     print(f"Parallel workers: {args.workers}")
     
     if args.all:
-        for pair in PAIRS:
+        pairs = get_all_pairs()
+        for pair in pairs:
             convert_pair(pair, max_workers=args.workers)
     else:
         convert_pair(args.symbol, max_workers=args.workers)

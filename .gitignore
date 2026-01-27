@@ -11,3 +11,8 @@ Thumbs.db
 
 # ログ等
 *.log
+
+
+# Added by cargo
+
+/target

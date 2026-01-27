@@ -261,20 +261,34 @@
         }
 
         .custom-select {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            color: var(--text-main);
-            border-radius: 8px;
-            padding: 6px 12px;
-            font-size: 13px;
-            font-weight: 600;
+            background: #11141d;
+            /* 深い背景色で視認性を確保 */
+            border: 2px solid #3b82f6;
+            /* ボーダーを太く、鮮やかに */
+            color: #ffffff;
+            /* 白文字でコントラスト最大化 */
+            border-radius: 6px;
+            padding: 8px 32px 8px 12px;
+            font-size: 14px;
+            font-weight: 700;
             cursor: pointer;
             transition: all 0.2s;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%233b82f6' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: calc(100% - 10px) center;
         }
 
         .custom-select:hover {
-            border-color: var(--accent-primary);
-            background: rgba(255, 255, 255, 0.05);
+            border-color: #60a5fa;
+            background-color: #1a1e2e;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+        }
+
+        /* オプション要素の背景色をOSに依存せず固定 */
+        .custom-select option {
+            background: #1a1e2e;
+            color: #ffffff;
         }
 
         .p-btn {
@@ -297,25 +311,27 @@
 
         /* Chart Grid with Premium Spacing */
         #chart-container-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(700px, 1fr));
-            grid-auto-rows: 900px;
+            display: flex;
+            flex-wrap: wrap;
             gap: 32px;
             padding: 32px;
             overflow-y: auto;
             flex: 1;
             background: var(--bg-deep);
+            align-content: flex-start;
         }
 
         .pane {
             background: var(--bg-pane);
             border: 1px solid var(--glass-border);
-            border-radius: 24px;
+            border-radius: 0;
             display: flex;
             flex-direction: column;
             overflow: hidden;
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
             position: relative;
+            flex: 1 1 800px;
+            max-width: 100%;
         }
 
         .pane-header {
@@ -353,17 +369,17 @@
 
         .chart-wrapper {
             background: #131722;
-            border-radius: 16px;
+            border-radius: 0;
             overflow: hidden;
             position: relative;
         }
 
         .main-chart-wrapper {
-            flex: 1;
+            height: 400px;
         }
 
         .sub-chart-wrapper {
-            height: 180px;
+            height: 100px;
         }
 
         .pane-loading-overlay {
@@ -438,6 +454,12 @@
                 <path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z" />
             </svg>
         </div>
+        <div class="nav-item" data-page="lab" title="Strategy Lab">
+            <svg viewBox="0 0 24 24">
+                <path
+                    d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" />
+            </svg>
+        </div>
         <div class="nav-item" title="Insights" style="margin-top: auto;">
             <svg viewBox="0 0 24 24">
                 <path
@@ -459,7 +481,11 @@
         <div id="page-charts" class="page-container">
             <div class="chart-header">
                 <div style="font-size: 18px; font-weight: 800; letter-spacing: -0.5px;">PRO ANALYSIS</div>
-                <button id="add-pane-btn" class="p-btn">+ New Workspace</button>
+                <div style="display:flex; gap:12px;">
+                    <button id="reset-panes-btn" class="p-btn"
+                        style="background:var(--bg-pane); border:1px solid var(--glass-border); color:var(--text-muted); box-shadow:none;">Reset</button>
+                    <button id="add-pane-btn" class="p-btn">+ New Workspace</button>
+                </div>
             </div>
 
             <div class="toolbar">
@@ -525,6 +551,95 @@
                 <!-- Premium Panes will be injected here -->
             </div>
         </div>
+
+        <!-- Strategy Lab View -->
+        <div id="page-lab" class="page-container" style="padding: 24px; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="font-size:24px; font-weight:700;">Strategy Lab</h2>
+                <div style="display:flex; gap:10px;">
+                    <button id="lab-new-project-btn" class="p-btn" style="background:#2b2b43;">+ New Project</button>
+                    <button id="lab-run-btn" class="p-btn">Run Backtest</button>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 350px 1fr; gap:24px; height: calc(100vh - 120px);">
+                <!-- Editor / Config -->
+                <div
+                    style="background:var(--bg-pane); border:1px solid var(--glass-border); border-radius:16px; padding:20px; display:flex; flex-direction:column; gap:16px;">
+                    <div>
+                        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:6px;">Target
+                            Symbol</label>
+                        <select id="lab-symbol" class="custom-select" style="width:100%;">
+                            <option value="EURUSD">EURUSD</option>
+                            <option value="USDJPY">USDJPY</option>
+                            <option value="GBPUSD">GBPUSD</option>
+                        </select>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                        <div>
+                            <label
+                                style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:6px;">Start
+                                Date</label>
+                            <input type="date" id="lab-start" class="custom-select" style="width:100%;"
+                                value="2025-01-01">
+                        </div>
+                        <div>
+                            <label
+                                style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:6px;">End
+                                Date</label>
+                            <input type="date" id="lab-end" class="custom-select" style="width:100%;"
+                                value="2025-01-31">
+                        </div>
+                    </div>
+
+                    <div style="flex:1; display:flex; flex-direction:column;">
+                        <label
+                            style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:6px;">Strategy
+                            Description (Natural Language)</label>
+                        <textarea id="lab-strategy-input"
+                            style="flex:1; background:#0b0e14; border:1px solid var(--glass-border); border-radius:8px; padding:12px; color:var(--text-main); font-family:'JetBrains Mono', monospace; font-size:13px; line-height:1.5; resize:none;"
+                            placeholder="Example: Buy when SMA 20 crosses above SMA 50. Close when SMA 20 crosses below SMA 50."></textarea>
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:8px;">* Currently supports
+                            simple SMA crossovers.</div>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div style="display:flex; flex-direction:column; gap:20px; overflow:hidden;">
+                    <!-- Stats Cards -->
+                    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:16px;">
+                        <div
+                            style="background:var(--bg-pane); padding:16px; border-radius:12px; border:1px solid var(--glass-border);">
+                            <div style="font-size:11px; color:var(--text-muted);">Total Trades</div>
+                            <div id="res-trades" style="font-size:20px; font-weight:700;">-</div>
+                        </div>
+                        <div
+                            style="background:var(--bg-pane); padding:16px; border-radius:12px; border:1px solid var(--glass-border);">
+                            <div style="font-size:11px; color:var(--text-muted);">Win Rate</div>
+                            <div id="res-winrate" style="font-size:20px; font-weight:700;">-%</div>
+                        </div>
+                        <div
+                            style="background:var(--bg-pane); padding:16px; border-radius:12px; border:1px solid var(--glass-border);">
+                            <div style="font-size:11px; color:var(--text-muted);">Total PnL (pips)</div>
+                            <div id="res-pnl" style="font-size:20px; font-weight:700;">-</div>
+                        </div>
+                        <div
+                            style="background:var(--bg-pane); padding:16px; border-radius:12px; border:1px solid var(--glass-border);">
+                            <div style="font-size:11px; color:var(--text-muted);">Profit Factor</div>
+                            <div id="res-pf" style="font-size:20px; font-weight:700;">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Area -->
+                    <div
+                        style="flex:1; background:var(--bg-pane); border-radius:16px; border:1px solid var(--glass-border); overflow:hidden; display:flex; flex-direction:column;">
+                        <div style="flex:1; position:relative;" id="lab-main-chart"></div>
+                        <div style="height:150px; border-top:1px solid var(--glass-border); position:relative;"
+                            id="lab-equity-chart"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
     <div id="global-error-display"></div>
@@ -573,8 +688,8 @@
         </div>
     </template>
 
-    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-    <script src="main.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="main.js?v=20260127-v3"></script>
 </body>
 
 </html>

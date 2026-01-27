@@ -8,8 +8,10 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 import pandas as pd
 
-# Parquetデータディレクトリ
-PARQUET_DIR = Path("../parquet_data")
+# パス設定
+SCRIPT_DIR = Path(__file__).parent
+DATA_DIR = (SCRIPT_DIR / "../data").resolve()
+PARQUET_DIR = (SCRIPT_DIR / "../parquet_data").resolve()
 
 
 def read_bi5_file(filepath: Path, base_timestamp_ms: int):
@@ -84,7 +86,7 @@ def load_day_data(pair: str, date: str):
     day = dt.day
     
     # データディレクトリ
-    data_dir = Path(f"../data/{pair}/{year}/{month:02d}/{day:02d}")
+    data_dir = DATA_DIR / pair / str(year) / f"{month:02d}" / f"{day:02d}"
     
     if not data_dir.exists():
         raise FileNotFoundError(f"データディレクトリが見つかりません: {data_dir}")
@@ -170,6 +172,7 @@ def load_date_range_data(pair: str, start_date: str, end_date: str):
 def load_day_data_from_parquet(pair: str, date: str):
     """
     Parquetファイルから1日分のOHLCデータを読み込み
+    月次ファイルがあればそこから抽出、なければ日次ファイルを探す
     
     Args:
         pair: 通貨ペア（例: "EURUSD"）
@@ -180,16 +183,52 @@ def load_day_data_from_parquet(pair: str, date: str):
     """
     dt = datetime.strptime(date, "%Y-%m-%d")
     year = dt.year
-    month = dt.month - 1  # Dukascopy format
-    day = dt.day
+    month = dt.month - 1  # Dukascopy folder format (0-indexed or 1-indexed? Wait, Convert script uses month directly without -1 but bi5 reader used -1?)
+    # Wait, bi5_reader.py uses `month = dt.month - 1` previously? 
+    # Let me check the View File output again.
+    # Line 185: month = dt.month - 1  # Dukascopy format
+    # But in aggregate_parquet.py I used `f"{month:02d}"` from `d.name`. 
+    # The folders in `data` are 00, 01, ... 11 for months? Or 01..12?
+    # `convert_to_parquet.py` implementation:
+    # `month = dt.month - 1` in `read_bi5_file`? No, let's verify folder structure.
     
-    parquet_file = PARQUET_DIR / pair / str(year) / f"{month:02d}" / f"{day:02d}.parquet"
+    # Let's assume the previous bi5_reader logic was correct about the folder structure.
+    # If the folders are 00-11, then aggregate_parquet.py which uses `d.name` would define month as 0..11.
+    # But filtering from monthly file (which contains 'time' column) needs comparison.
+    # The monthly file itself will be `00.parquet` etc?
     
-    if not parquet_file.exists():
-        raise FileNotFoundError(f"Parquetファイルが見つかりません: {parquet_file}")
+    # Re-reading `bi5_reader.py` lines 86: `data_dir = DATA_DIR / pair / str(year) / f"{month:02d}" / f"{day:02d}"`
+    # And line 81: `month = dt.month - 1`
+    # So folders are 00-11.
+    
+    # Aggregation script: `output_file = PARQUET_DIR / pair / str(year) / f"{month:02d}.parquet"`
+    # where month comes from directory name. So it respects the 00-11 naming.
+    
+    parquet_month_file = PARQUET_DIR / pair / str(year) / f"{month:02d}.parquet"
+    if parquet_month_file.exists():
+        # 月次ファイルから読み込み
+        df = pd.read_parquet(parquet_month_file, engine='pyarrow')
+        
+        # 日付でフィルタリング
+        # df['time'] is datetime? In convert_to_parquet:
+        # ohlc['time'] = ohlc['time'] (datetime)
+        # So filtering:
+        target_day_start = datetime(year, dt.month, dt.day, 0, 0, 0, tzinfo=timezone.utc)
+        target_day_end = target_day_start + timedelta(days=1)
+        
+        # Filter
+        mask = (df['time'] >= target_day_start) & (df['time'] < target_day_end)
+        day_df = df.loc[mask].copy()
+        return day_df
+
+    # 日次ファイル（フォールバック）
+    parquet_day_file = PARQUET_DIR / pair / str(year) / f"{month:02d}" / f"{day:02d}.parquet"
+    
+    if not parquet_day_file.exists():
+        raise FileNotFoundError(f"Parquetファイルが見つかりません: {parquet_day_file}")
     
     # Parquetから読み込み（高速）
-    df = pd.read_parquet(parquet_file, engine='pyarrow')
+    df = pd.read_parquet(parquet_day_file, engine='pyarrow')
     return df
 
 

@@ -3,10 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
-from bi5_reader import load_day_data_smart, load_date_range_data_smart
-from typing import Optional
+from bi5_reader import load_day_data_smart, load_date_range_data_smart, DATA_DIR, PARQUET_DIR
+import sys
+sys.path.append("../engine")
+from engine import run_backtest
+from pydantic import BaseModel
+from typing import Optional, List
 from functools import lru_cache
 import json
+import os
 
 app = FastAPI()
 
@@ -36,6 +41,21 @@ def get_cached_ohlc(symbol: str, start_date: str, end_date: str):
         print(f"Error: {e}")
         return []
 
+@app.get("/symbols")
+def get_symbols():
+    """利用可能な通貨ペアのリストを取得"""
+    symbols = set()
+    
+    # 既存のデータディレクトリをスキャン
+    if DATA_DIR.exists():
+        symbols.update([d.name for d in DATA_DIR.iterdir() if d.is_dir() and not d.name.startswith('.')])
+        
+    # Parquetディレクトリをスキャン
+    if PARQUET_DIR.exists():
+        symbols.update([d.name for d in PARQUET_DIR.iterdir() if d.is_dir() and not d.name.startswith('.')])
+        
+    return sorted(list(symbols))
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -58,6 +78,21 @@ def get_ohlc(
     
     # Use cached version for instant response
     return get_cached_ohlc(symbol, start_date, end_date)
+
+class LabRequest(BaseModel):
+    symbol: str
+    start: str
+    end: str
+    fast: int
+    slow: int
+
+@app.post("/lab/run")
+def run_lab_strategy(req: LabRequest):
+    # Execute the Polars engine
+    # In a real "AI" scenario, we would parse natural language here.
+    # For now, we use the explicitly extracted params.
+    result = run_backtest(req.symbol, req.start, req.end, req.fast, req.slow)
+    return result
 
 # --- Serve Frontend ---
 app.mount("/static", StaticFiles(directory="../frontend"), name="static")
